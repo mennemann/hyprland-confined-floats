@@ -1,11 +1,17 @@
 #define WLR_USE_UNSTABLE
 
 #include <algorithm>
+#include <hyprland/src/config/lua/bindings/LuaBindingsInternal.hpp>
 #include <hyprland/src/desktop/rule/windowRule/WindowRuleEffectContainer.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
 #include <hyprland/src/helpers/Monitor.hpp>
 #include <hyprland/src/layout/target/WindowTarget.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
+
+extern "C" {
+#include <lauxlib.h>
+#include <lua.h>
+}
 
 #include "globals.hpp"
 
@@ -67,6 +73,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     }
 
     config.confineRuleIdx = Desktop::Rule::windowEffects()->registerEffect("confined-floats:confine");
+
+    HyprlandAPI::addLuaFunction(PHANDLE, "confined_floats", "is_loaded",
+                                [](lua_State* L) -> int { lua_pushboolean(L, 1); return 1; });
 
     static const auto METHODS = HyprlandAPI::findFunctionsByName(PHANDLE, "setPositionGlobal");
     bool found = false;

@@ -29,18 +29,22 @@ The plugin adds the window rule `confined-floats:confine`. Only matching windows
 
 ```lua
 -- confine firefox windows
-hl.window_rule({
-    match = {
-        class = "^(firefox)$",
-    },
-    ["confined-floats:confine"] = true,
-})
+if hl.plugin.confined_floats ~= nil then
+    hl.window_rule({
+        match = {
+            class = "^(firefox)$",
+        },
+        ["confined-floats:confine"] = true,
+    })
+end
 ```
 
 ```lua
 -- confine everything
-hl.window_rule({
-    match = { class = ".*" },
-    ["confined-floats:confine"] = true,
-})
+if hl.plugin.confined_floats ~= nil then
+    hl.window_rule({
+        match = { class = ".*" },
+        ["confined-floats:confine"] = true,
+    })
+end
 ```
