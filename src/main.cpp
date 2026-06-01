@@ -151,12 +151,25 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
     if (workArea.bounds.w <= 0 || workArea.bounds.h <= 0)
         return callOriginal(thisptr, box);
 
-    const double DESX = box.logicalBox.x;
-    const double DESY = box.logicalBox.y;
-    const double WINW = box.logicalBox.w;
-    const double WINH = box.logicalBox.h;
+    const auto MON = WINDOW->m_monitor.lock();
 
     Layout::STargetBox clamped = box;
+
+    if (MON) {
+        CBox WA = MON->logicalBoxMinusReserved();
+        double maxW = WA.w * 0.99, maxH = WA.h * 0.99;
+        if (clamped.logicalBox.w > maxW || clamped.logicalBox.h > maxH) {
+            clamped.logicalBox.x += (clamped.logicalBox.w - std::min(clamped.logicalBox.w, maxW)) / 2.0;
+            clamped.logicalBox.y += (clamped.logicalBox.h - std::min(clamped.logicalBox.h, maxH)) / 2.0;
+            clamped.logicalBox.w = std::min(clamped.logicalBox.w, maxW);
+            clamped.logicalBox.h = std::min(clamped.logicalBox.h, maxH);
+        }
+    }
+
+    const double DESX = clamped.logicalBox.x;
+    const double DESY = clamped.logicalBox.y;
+    const double WINW = clamped.logicalBox.w;
+    const double WINH = clamped.logicalBox.h;
 
     if (WINW >= workArea.bounds.w)
         clamped.logicalBox.x = workArea.bounds.x;
