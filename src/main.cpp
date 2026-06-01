@@ -17,7 +17,71 @@ extern "C" {
 #include <lua.h>
 }
 
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include "globals.hpp"
+
+struct Offsets {
+    double top = 0, right = 0, bottom = 0, left = 0;
+    bool topPct = false, rightPct = false, bottomPct = false, leftPct = false;
+};
+
+static Offsets parseOffsets(const std::string& raw) {
+    Offsets o;
+    if (raw.empty())
+        return o;
+
+    std::vector<std::string> parts;
+    std::istringstream ss(raw);
+    std::string tok;
+    while (ss >> tok)
+        parts.push_back(tok);
+
+    if (parts.empty())
+        return o;
+
+    auto parse = [](const std::string& s, double& val, bool& pct) {
+        if (s.ends_with('%')) {
+            pct = true;
+            val = std::stod(s.substr(0, s.size() - 1));
+        } else {
+            pct = false;
+            val = std::stod(s);
+        }
+    };
+
+    switch (parts.size()) {
+        case 1:
+            parse(parts[0], o.top, o.topPct);
+            o.right = o.bottom = o.left = o.top;
+            o.rightPct = o.bottomPct = o.leftPct = o.topPct;
+            break;
+        case 2:
+            parse(parts[0], o.top, o.topPct);
+            o.bottom = o.top;
+            o.bottomPct = o.topPct;
+            parse(parts[1], o.right, o.rightPct);
+            o.left = o.right;
+            o.leftPct = o.rightPct;
+            break;
+        case 3:
+            parse(parts[0], o.top, o.topPct);
+            parse(parts[1], o.right, o.rightPct);
+            o.left = o.right;
+            o.leftPct = o.rightPct;
+            parse(parts[2], o.bottom, o.bottomPct);
+            break;
+        case 4:
+            parse(parts[0], o.top, o.topPct);
+            parse(parts[1], o.right, o.rightPct);
+            parse(parts[2], o.bottom, o.bottomPct);
+            parse(parts[3], o.left, o.leftPct);
+            break;
+    }
+    return o;
+}
 
 inline CFunctionHook* g_pSetPositionGlobalHook = nullptr;
 
@@ -145,44 +209,62 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
     if (!WINDOW->m_ruleApplicator->m_otherProps.props.contains(config.confineRuleIdx))
         return callOriginal(thisptr, box);
 
+    Offsets off;
+    auto it = WINDOW->m_ruleApplicator->m_otherProps.props.find(config.confineRuleIdx);
+    if (it != WINDOW->m_ruleApplicator->m_otherProps.props.end() && !it->second->effect.empty()) {
+        try {
+            off = parseOffsets(it->second->effect);
+        } catch (...) {
+        }
+    }
+
     if (workAreaDirty)
         recomputeWorkArea();
 
     if (workArea.bounds.w <= 0 || workArea.bounds.h <= 0)
         return callOriginal(thisptr, box);
 
-    const auto MON = WINDOW->m_monitor.lock();
-
     Layout::STargetBox clamped = box;
 
-    if (MON) {
-        CBox WA = MON->logicalBoxMinusReserved();
-        double maxW = WA.w * 0.99, maxH = WA.h * 0.99;
-        if (clamped.logicalBox.w > maxW || clamped.logicalBox.h > maxH) {
-            clamped.logicalBox.x += (clamped.logicalBox.w - std::min(clamped.logicalBox.w, maxW)) / 2.0;
-            clamped.logicalBox.y += (clamped.logicalBox.h - std::min(clamped.logicalBox.h, maxH)) / 2.0;
-            clamped.logicalBox.w = std::min(clamped.logicalBox.w, maxW);
-            clamped.logicalBox.h = std::min(clamped.logicalBox.h, maxH);
-        }
-    }
-
-    const double DESX = clamped.logicalBox.x;
-    const double DESY = clamped.logicalBox.y;
     const double WINW = clamped.logicalBox.w;
     const double WINH = clamped.logicalBox.h;
 
-    if (WINW >= workArea.bounds.w)
-        clamped.logicalBox.x = workArea.bounds.x;
-    else
-        clamped.logicalBox.x = std::clamp(DESX, workArea.bounds.x, workArea.bounds.x + workArea.bounds.w - WINW);
+    double lo = off.leftPct ? WINW * off.left / 100.0 : off.left;
+    double ro = off.rightPct ? WINW * off.right / 100.0 : off.right;
+    double to = off.topPct ? WINH * off.top / 100.0 : off.top;
+    double bo = off.bottomPct ? WINH * off.bottom / 100.0 : off.bottom;
 
-    if (WINH >= workArea.bounds.h)
-        clamped.logicalBox.y = workArea.bounds.y;
+    CBox pseudo;
+    pseudo.x = clamped.logicalBox.x - lo;
+    pseudo.y = clamped.logicalBox.y - to;
+    pseudo.w = clamped.logicalBox.w + lo + ro;
+    pseudo.h = clamped.logicalBox.h + to + bo;
+
+    const auto MON = WINDOW->m_monitor.lock();
+    if (MON) {
+        CBox WA = MON->logicalBoxMinusReserved();
+        double maxW = WA.w * 0.99, maxH = WA.h * 0.99;
+        if (pseudo.w > maxW || pseudo.h > maxH) {
+            double oldW = pseudo.w, oldH = pseudo.h;
+            pseudo.w = std::min(pseudo.w, maxW);
+            pseudo.h = std::min(pseudo.h, maxH);
+            pseudo.x += (oldW - pseudo.w) / 2.0;
+            pseudo.y += (oldH - pseudo.h) / 2.0;
+        }
+    }
+
+    if (pseudo.w >= workArea.bounds.w)
+        pseudo.x = workArea.bounds.x;
     else
-        clamped.logicalBox.y = std::clamp(DESY, workArea.bounds.y, workArea.bounds.y + workArea.bounds.h - WINH);
+        pseudo.x = std::clamp(pseudo.x, workArea.bounds.x, workArea.bounds.x + workArea.bounds.w - pseudo.w);
+
+    if (pseudo.h >= workArea.bounds.h)
+        pseudo.y = workArea.bounds.y;
+    else
+        pseudo.y = std::clamp(pseudo.y, workArea.bounds.y, workArea.bounds.y + workArea.bounds.h - pseudo.h);
 
     for (auto& gap : workArea.gaps) {
-        CBox overlap = clamped.logicalBox.intersection(gap);
+        CBox overlap = pseudo.intersection(gap);
         if (overlap.w <= 0 || overlap.h <= 0)
             continue;
 
@@ -191,53 +273,58 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
         double bw = workArea.bounds.w, bh = workArea.bounds.h;
 
         double bestDist = std::numeric_limits<double>::max();
-        double newX = clamped.logicalBox.x, newY = clamped.logicalBox.y;
+        double newX = pseudo.x, newY = pseudo.y;
 
         double nx = gx + gw;
-        if (nx + WINW <= bx + bw + 1.0) {
-            double d = nx - clamped.logicalBox.x;
-            if (d < bestDist) {
-                bestDist = d;
+        if (nx + pseudo.w <= bx + bw + 1.0) {
+            double d = nx - pseudo.x;
+            if (std::abs(d) < bestDist) {
+                bestDist = std::abs(d);
                 newX = nx;
-                newY = clamped.logicalBox.y;
+                newY = pseudo.y;
             }
         }
 
-        nx = gx - WINW;
+        nx = gx - pseudo.w;
         if (nx >= bx - 1.0) {
-            double d = clamped.logicalBox.x - nx;
-            if (d < bestDist) {
-                bestDist = d;
+            double d = pseudo.x - nx;
+            if (std::abs(d) < bestDist) {
+                bestDist = std::abs(d);
                 newX = nx;
-                newY = clamped.logicalBox.y;
+                newY = pseudo.y;
             }
         }
 
         double ny = gy + gh;
-        if (ny + WINH <= by + bh + 1.0) {
-            double d = ny - clamped.logicalBox.y;
-            if (d < bestDist) {
-                bestDist = d;
-                newX = clamped.logicalBox.x;
+        if (ny + pseudo.h <= by + bh + 1.0) {
+            double d = ny - pseudo.y;
+            if (std::abs(d) < bestDist) {
+                bestDist = std::abs(d);
+                newX = pseudo.x;
                 newY = ny;
             }
         }
 
-        ny = gy - WINH;
+        ny = gy - pseudo.h;
         if (ny >= by - 1.0) {
-            double d = clamped.logicalBox.y - ny;
-            if (d < bestDist) {
-                bestDist = d;
-                newX = clamped.logicalBox.x;
+            double d = pseudo.y - ny;
+            if (std::abs(d) < bestDist) {
+                bestDist = std::abs(d);
+                newX = pseudo.x;
                 newY = ny;
             }
         }
 
         if (bestDist < std::numeric_limits<double>::max()) {
-            clamped.logicalBox.x = newX;
-            clamped.logicalBox.y = newY;
+            pseudo.x = newX;
+            pseudo.y = newY;
         }
     }
+
+    clamped.logicalBox.x = pseudo.x + lo;
+    clamped.logicalBox.y = pseudo.y + to;
+    clamped.logicalBox.w = pseudo.w - lo - ro;
+    clamped.logicalBox.h = pseudo.h - to - bo;
 
     callOriginal(thisptr, clamped);
 }
