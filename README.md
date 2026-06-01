@@ -13,6 +13,8 @@ hyprpm add https://github.com/mennemann/hyprland-confined-floats
 hyprpm enable confined-floats
 ```
 
+Also make sure you execute `hyprpm reload` somewhere in your autostarts.
+
 ### Manual
 
 ```bash
