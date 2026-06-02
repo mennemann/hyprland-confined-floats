@@ -226,6 +226,12 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
 
     Layout::STargetBox clamped = box;
 
+    SBoxExtents deco = WINDOW->getWindowExtentsUnified(Desktop::View::RESERVED_EXTENTS);
+    clamped.logicalBox.x -= deco.topLeft.x;
+    clamped.logicalBox.y -= deco.topLeft.y;
+    clamped.logicalBox.w += deco.topLeft.x + deco.bottomRight.x;
+    clamped.logicalBox.h += deco.topLeft.y + deco.bottomRight.y;
+
     const double WINW = clamped.logicalBox.w;
     const double WINH = clamped.logicalBox.h;
 
@@ -325,6 +331,11 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
     clamped.logicalBox.y = pseudo.y + to;
     clamped.logicalBox.w = pseudo.w - lo - ro;
     clamped.logicalBox.h = pseudo.h - to - bo;
+
+    clamped.logicalBox.x += deco.topLeft.x;
+    clamped.logicalBox.y += deco.topLeft.y;
+    clamped.logicalBox.w -= deco.topLeft.x + deco.bottomRight.x;
+    clamped.logicalBox.h -= deco.topLeft.y + deco.bottomRight.y;
 
     callOriginal(thisptr, clamped);
 }
