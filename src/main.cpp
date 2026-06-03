@@ -270,6 +270,11 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
         pseudo.y = std::clamp(pseudo.y, workArea.bounds.y, workArea.bounds.y + workArea.bounds.h - pseudo.h);
 
     for (auto& gap : workArea.gaps) {
+        double dx = -std::min(lo + ro, 0.0);
+        double dy = -std::min(to + bo, 0.0);
+        if (dx >= gap.w || dy >= gap.h)
+            continue;
+
         CBox overlap = pseudo.intersection(gap);
         if (overlap.w <= 0 || overlap.h <= 0)
             continue;
