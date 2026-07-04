@@ -391,8 +391,6 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     static auto P6 = Event::bus()->m_events.layer.closed.listen([](PHLLS) { workAreaDirty = true; });
     static auto P7 = Event::bus()->m_events.layer.updateRules.listen([](PHLLS) { workAreaDirty = true; });
 
-    HyprlandAPI::addNotification(PHANDLE, "[confined-floats] Initialized successfully!", CHyprColor{0.2, 1.0, 0.2, 1.0}, 5000);
-
     return {"confined-floats", "Prevent floating windows from moving off-screen", "Marcin Mennemann", "1.0"};
 }
 
