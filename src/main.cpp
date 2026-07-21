@@ -6,9 +6,10 @@
 #include <hyprland/src/desktop/rule/windowRule/WindowRuleEffectContainer.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
 #include <hyprland/src/event/EventBus.hpp>
-#include <hyprland/src/helpers/Monitor.hpp>
+#include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/layout/target/WindowTarget.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
+#include <hyprland/src/state/MonitorState.hpp>
 #include <limits>
 #include <set>
 
@@ -85,10 +86,10 @@ static Offsets parseOffsets(const std::string& raw) {
 
 inline CFunctionHook* g_pSetPositionGlobalHook = nullptr;
 
-typedef void (*origSetPositionGlobal)(void*, const Layout::STargetBox&);
+typedef void (*origSetPositionGlobal)(void*, const Layout::STargetBox&, uint8_t);
 
-static void callOriginal(void* thisptr, const Layout::STargetBox& box) {
-    (*(origSetPositionGlobal)g_pSetPositionGlobalHook->m_original)(thisptr, box);
+static void callOriginal(void* thisptr, const Layout::STargetBox& box, uint8_t flags) {
+    (*(origSetPositionGlobal)g_pSetPositionGlobalHook->m_original)(thisptr, box, flags);
 }
 
 static bool workAreaDirty = true;
@@ -99,7 +100,7 @@ static void recomputeWorkArea() {
 
     std::vector<CBox> monitors;
 
-    for (auto& m : g_pCompositor->m_monitors) {
+    for (auto& m : State::monitorState()->monitors()) {
         if (!m->m_output)
             continue;
 
@@ -196,18 +197,18 @@ static void recomputeWorkArea() {
     workAreaDirty = false;
 }
 
-static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
+static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box, uint8_t flags) {
     const auto TARGET = rc<Layout::CWindowTarget*>(thisptr);
 
     if (!TARGET->floating())
-        return callOriginal(thisptr, box);
+        return callOriginal(thisptr, box, flags);
 
     const auto WINDOW = TARGET->window();
     if (!WINDOW || !WINDOW->m_ruleApplicator)
-        return callOriginal(thisptr, box);
+        return callOriginal(thisptr, box, flags);
 
     if (!WINDOW->m_ruleApplicator->m_otherProps.props.contains(config.confineRuleIdx))
-        return callOriginal(thisptr, box);
+        return callOriginal(thisptr, box, flags);
 
     Offsets off;
     auto it = WINDOW->m_ruleApplicator->m_otherProps.props.find(config.confineRuleIdx);
@@ -222,7 +223,7 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
         recomputeWorkArea();
 
     if (workArea.bounds.w <= 0 || workArea.bounds.h <= 0)
-        return callOriginal(thisptr, box);
+        return callOriginal(thisptr, box, flags);
 
     Layout::STargetBox clamped = box;
 
@@ -342,7 +343,7 @@ static void hkSetPositionGlobal(void* thisptr, const Layout::STargetBox& box) {
     clamped.logicalBox.w -= deco.topLeft.x + deco.bottomRight.x;
     clamped.logicalBox.h -= deco.topLeft.y + deco.bottomRight.y;
 
-    callOriginal(thisptr, clamped);
+    callOriginal(thisptr, clamped, flags);
 }
 
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
