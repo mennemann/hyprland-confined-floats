@@ -350,11 +350,21 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
     return HYPRLAND_API_VERSION;
 }
 
+static std::string clientHash() {
+    static auto stripPatch = [](std::string_view version) {
+        return std::string{version.substr(0, version.find_last_of('.'))};
+    };
+
+    return std::string{GIT_COMMIT_HASH} + "_aq_" + stripPatch(CONFINED_FLOATS_AQUAMARINE_VERSION) + "_hu_" +
+           stripPatch(CONFINED_FLOATS_HYPRUTILS_VERSION) + "_hg_" + stripPatch(CONFINED_FLOATS_HYPRGRAPHICS_VERSION) + "_hc_" +
+           stripPatch(CONFINED_FLOATS_HYPRCURSOR_VERSION) + "_hlg_" + stripPatch(CONFINED_FLOATS_HYPRLANG_VERSION);
+}
+
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
     const std::string HASH = __hyprland_api_get_hash();
-    const std::string CLIENT_HASH = __hyprland_api_get_client_hash();
+    const std::string CLIENT_HASH = clientHash();
 
     if (HASH != CLIENT_HASH) {
         HyprlandAPI::addNotification(PHANDLE, "[confined-floats] Version mismatch (headers vs running hyprland)",
