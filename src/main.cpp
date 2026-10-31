@@ -4,7 +4,7 @@
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/config/lua/bindings/LuaBindingsInternal.hpp>
 #include <hyprland/src/desktop/rule/windowRule/WindowRuleEffectContainer.hpp>
-#include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/window/Window.hpp>
 #include <hyprland/src/event/EventBus.hpp>
 #include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/layout/target/WindowTarget.hpp>
